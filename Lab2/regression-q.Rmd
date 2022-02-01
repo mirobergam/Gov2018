@@ -160,7 +160,7 @@ bootstrap  <- function(data) {
       
   }
   
-  return(cbind(bi_preds, multi_preds))
+  return(as_tibble(cbind(bi_preds, multi_preds)))
   
 }
 
@@ -177,10 +177,32 @@ We will say the model predicts that the incumbent wins if the predicted vote sha
 
 ```{r}
 
-as_tibble(predictions) %>%
-  pivot_longer(cols = bi_preds:multi_preds, names_to = "model", values_to = "values") %>%
+bi_high <- quantile(predictions$bi_preds,.975)
+bi_mid <- quantile(predictions$bi_preds,.5)
+bi_low <- quantile(predictions$bi_preds,.025)
+
+multi_high <- quantile(predictions$multi_preds,.975)
+multi_mid <- quantile(predictions$multi_preds,.5)
+multi_low <- quantile(predictions$multi_preds,.025)
+
+predictions %>%
+  select(bi_preds) %>%
   ggplot() +
-  geom_histogram(aes(x = values, fill = model), alpha = 0.5)
+  geom_histogram(aes(x = bi_preds)) +
+  geom_vline(xintercept = bi_high, color = "red") + 
+  geom_vline(xintercept = bi_mid, color = "green") + 
+  geom_vline(xintercept = bi_low, color = "red") 
+
+predictions %>%
+  select(multi_preds) %>%
+  ggplot() +
+  geom_histogram(aes(x = multi_preds)) +
+  geom_vline(xintercept = multi_high, color = "red") + 
+  geom_vline(xintercept = multi_mid, color = "green") + 
+  geom_vline(xintercept = multi_low, color = "red") 
+
+sum(predictions$bi_preds > 0.5) / 1000
+sum(predictions$multi_preds > 0.5) / 1000
 
 ```
 
