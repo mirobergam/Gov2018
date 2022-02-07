@@ -49,9 +49,9 @@ data %>%
   ggplot(aes(x = dem_pres_2004, y = prop_d)) +
   geom_point() +
   theme_bw() +
-  labs(x = "2004 Two-Party Democratic Voteshare",
-       y = "2006 Two-Party Democratic Voteshare",
-       title = "")
+  labs(x = "2004 Two-Party Dem Voteshare",
+       y = "Proportion of Votes for the Dem Candidate",
+       title = "2004 Two-Party Dem Voteshare v. Proportion of Votes for the Dem Candidate")
 
 ```
 
@@ -61,21 +61,24 @@ Regress the proportion of votes for the Democratic candidate, against the propor
 
 ```{r}
 
+# Creating model
 model1 <- lm(prop_d ~ dem_pres_2004, data = data)
 
+# Printing summary
 summary(model1)
 
 ```
 
 ```{r}
 
+# Plotting again with geom_smooth to add the bivariate regression line
 data %>%
   ggplot(aes(x = dem_pres_2004, y = prop_d)) +
   geom_point() +
   theme_bw() +
-  labs(x = "2004 Two-Party Democratic Voteshare",
-       y = "2006 Two-Party Democratic Voteshare",
-       title = "") +
+  labs(x = "2004 Two-Party Dem Voteshare",
+       y = "Proportion of Votes for the Dem Candidate",
+       title = "2004 Two-Party Dem Voteshare v. Proportion of Votes for the Dem Candidate") + 
   geom_smooth(method = "lm")
 
 ```
@@ -86,12 +89,15 @@ Using the bivariate regression and a function you have written yourself (not `pr
 
 ```{r}
 
+# Creating a function that takes in a model and one parameter value for bivariate predictions
 prediction_bivariate  <- function(mod, num) {
+  
+  #Calculating prediction by multiplying parameter by coef and adding intercept
   pred <- (mod$coefficients[1] + (num * mod$coefficients[2]))
   return(pred)
 }
 
-
+# Outputting results
 prediction_bivariate(model1, 0.5)
 
 ```
@@ -107,19 +113,25 @@ Using the multivariate regression and a function you have written yourself, repo
 - `dem_inc` = 1
 
 ```{r}
+
+# Second model with new regression terms
 model2 <- lm(prop_d ~ dem_pres_2004 + dem_pres_2000 + dem_inc, data = data)
 
 
+# New function for multivariate predictions
 prediction_multivariate  <- function(mod, nums) {
   
+  # Adding one to multiply the intercept by
   pred_values <- c(1, nums)
   
+  # Failsafe if lengths don't match, from class
   if(length(pred_values) != length(mod$coefficients)) stop("!!!")
   
+  # Returning the sum of the intercept and the coefficients * X
   return(sum(pred_values * mod$coefficients))
 }
 
-
+# Printing prediction
 prediction_multivariate(model2, c(0.5, 0.5, 1))
 ```
 
@@ -138,28 +150,37 @@ e) Repeat a-d 1000 times.
 
 
 ```{r}
-set.seed(2018)
 
+#Setting seed
+set.seed(12020)
+
+# Bootstrap function
 bootstrap  <- function(data) {
   
+  # To store preds outside of loop
   bi_preds <- c()
   multi_preds <- c()
 
   for(i in 0:1000) {
     
+      # Sample entire dataset with replacement
       samp <- sample_n(data, 53, replace = TRUE)
       
+      # Creating the two model types with the sample
       bi <- lm(prop_d ~ dem_pres_2004, data = samp)
       multi <-  lm(prop_d ~ dem_pres_2004 + dem_pres_2000 + dem_inc, data = samp)
       
+      # Making predictions using earlier functions
       bi_pred <- prediction_bivariate(bi, 0.5)
       multi_pred <- prediction_multivariate(multi, c(0.5, 0.5, 1))
       
+      # Adding preds to list
       bi_preds <- c(bi_preds, bi_pred)
       multi_preds <- c(multi_preds, multi_pred)
       
   }
   
+  # Returning a tibble of predictions for both models
   return(as_tibble(cbind(bi_preds, multi_preds)))
   
 }
@@ -177,34 +198,46 @@ We will say the model predicts that the incumbent wins if the predicted vote sha
 
 ```{r}
 
+# 95% Conf ints for bivariate
 bi_high <- quantile(predictions$bi_preds,.975)
 bi_mid <- quantile(predictions$bi_preds,.5)
 bi_low <- quantile(predictions$bi_preds,.025)
 
+
+# 95% Conf ints for multivariate
 multi_high <- quantile(predictions$multi_preds,.975)
 multi_mid <- quantile(predictions$multi_preds,.5)
 multi_low <- quantile(predictions$multi_preds,.025)
 
+# Plotting bivariate histogram
 predictions %>%
   select(bi_preds) %>%
   ggplot() +
   geom_histogram(aes(x = bi_preds)) +
   geom_vline(xintercept = bi_high, color = "red") + 
   geom_vline(xintercept = bi_mid, color = "green") + 
-  geom_vline(xintercept = bi_low, color = "red") 
+  geom_vline(xintercept = bi_low, color = "red") + 
+  labs(x = "Predictions",
+       y = "Count",
+       title = "Bivariate Model Predictions for Voteshare")
 
+# Plotting multivariate histogram
 predictions %>%
   select(multi_preds) %>%
   ggplot() +
   geom_histogram(aes(x = multi_preds)) +
   geom_vline(xintercept = multi_high, color = "red") + 
   geom_vline(xintercept = multi_mid, color = "green") + 
-  geom_vline(xintercept = multi_low, color = "red") 
+  geom_vline(xintercept = multi_low, color = "red") +
+  labs(x = "Predictions",
+       y = "Count",
+       title = "Multivariate Model Predictions for Voteshare")
 
-sum(predictions$bi_preds > 0.5) / 1000
-sum(predictions$multi_preds > 0.5) / 1000
+
+round(sum(predictions$bi_preds > 0.5) / 1000, 2)
+round(sum(predictions$multi_preds > 0.5) / 1000, 2)
 
 ```
 
-
+99% of predictions were greater than 0.5 for the bivariate regression, and 100% were greater for the multivariate regression. 
 
