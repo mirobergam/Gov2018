@@ -1,0 +1,251 @@
+---
+title: 'Gov 2018: Lab 3 LASSO'
+author:
+- 'Adeline Lo'
+- 'Your name: '
+date: "Tuesday February 8, 2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 1. Setting up New York Times Annotated Corpus
+
+### Question 1.1
+
+Today, we are going to analyze the New York Times Annonated Corpus. From Canvas please download `NYT.RData` and load the file.
+
+This loads a list, `nyt_list`, with the following components:
+
+- train : the document term matrix for the training set
+- train_label: an indicator equal to 1 if the story comes from the national desk for each document in the training set
+- test: the document term matrix for the test set.
+- test_label: an indicator equal to 1 if the story comes from the national desk for each document in the test set
+
+We will work with `train` and `train_label` to build our prediction models. We will use the `test` set to test the fit of our model.  
+
+Put these components in individual objects (name each component as a separate object that is easy to understand for you and the reader).
+
+```{r}
+# Load library and tidyverse
+library(tidyverse)
+load("NYT.RData")
+
+# Reading in data, with train and test as tibbles
+train <- as_tibble(nyt_list[[1]])
+test <- as_tibble(nyt_list[[3]])
+train_label <- nyt_list[[2]]
+test_label <- nyt_list[[4]]
+```
+
+
+
+### Question 1.2 
+
+Print the dimensions of the train and test set. What is the ratio of $n$ to the number of covariates?
+
+Note that the `train` and `test` matrices do not contain a column for the labels. Combine the dtm and labels into two data frames for the train set and for the test set.
+
+```{r}
+# Printing dimensions
+print("Train dims")
+dim(train)
+print("Test dims")
+dim(test)
+
+# Printing ratios
+print("Train ratio")
+nrow(train)/dim(train)[[2]]
+print("Test ratio")
+nrow(test)/dim(test)[[2]]
+```
+
+```{r}
+# Add labels to dataset
+train <- train %>%
+  mutate(train_label = train_label)
+test <- test %>%
+  mutate(test_label = test_label)
+```
+
+
+## 2. Linear Probability Model
+
+### Question 2.1 
+
+We are ready to apply a linear probability model to perform classification. Using the `lm` function regress `train_label` against all the words in train. To do this, note that you can include all the variable in a regression using the following syntax:
+`full_reg <- lm(train_label ~ . , data = train.df)`
+
+The `~.` tells R to include all the variables in the data frame.
+
+Analyze the coefficients from full_reg , what do you notice? Specifically, what happens to the number of coefficients in the model?
+
+```{r}
+# Make model
+full_reg <- lm(train_label ~ . , data = train)
+#summary(full_reg)
+```
+ 
+Many of the coefficient values are listed as NA in the summary(), with a message stating that "801 not defined because of singularities". I believe this means that 4/5ths of the words were dropped because they were very rare, too rare to be useful in detecting a trend. 
+
+### Question 2.2
+
+We are now going to make predictions using the training data and the test data and compare their properties.
+
+Using the `predict` function, make predictions for all observations in the training set. Then, classify the documents as national or not using a threshold of 0.5. Assess your classification to the actual data. Create a 2x2 table of the predicted train labels and true train label and note your findings.
+
+```{r}
+
+set.seed(12019)
+
+# Make preds
+train$preds <- predict(full_reg, train)
+
+# Round preds based on threshold
+train <- train %>%
+  mutate(preds = ifelse(preds > 0.5, 1, 0))
+
+# Creating table of 1 and 0s 
+preds_1 <- sum(train$preds)
+preds_0 <- 200 - sum(train$preds)
+label_1 <- sum(train$train_label)
+label_0 <- 200 - sum(train$train_label)
+
+tibble(value = c(1,0),
+       preds = c(preds_1, preds_0),
+       labels = c(label_1, label_0))
+
+train %>%
+  mutate(correct = ifelse(preds == train_label, 1, 0)) %>%
+  summarise(accuracy = sum(correct)/n())
+```
+
+
+### Question 2.3
+
+Now, use the model to make a prediction for the *test* data and classify using a 0.5 threshold.
+
+Assess the accuracy of your classification by comparing it to the actual test data. What do you notice? What would happen if you randomly guessed the test labels using a prior on the probability of 1 as the proportion of 1s in the train labels? Remember to `set.seed(12019)`. Compare your findings between the two methods.
+
+```{r}
+
+set.seed(12019)
+
+# Make preds
+test$preds <- predict(full_reg, test)
+
+# Round preds based on threshold
+test <- test %>%
+  mutate(preds = ifelse(preds > 0.5, 1, 0))
+
+# Creating table of 1 and 0s 
+preds_1 <- sum(test$preds)
+preds_0 <- 88 - sum(test$preds)
+label_1 <- sum(test$test_label)
+label_0 <- 88 - sum(test$test_label)
+
+tibble(value = c(1,0),
+       preds = c(preds_1, preds_0),
+       labels = c(label_1, label_0))
+
+test %>%
+  mutate(correct = ifelse(preds == test_label, 1, 0)) %>%
+  summarise(accuracy = sum(correct)/n())
+```
+
+```{r}
+
+set.seed(12019)
+
+# Finding the prior based on the train labels
+sum(train$train_label)/nrow(train)
+
+# Sampling with 0.25 probability of a 1
+
+prior_list <- c(1, 0, 0, 0)
+
+test$prior <- sample(prior_list, replace = TRUE, size = 88)
+
+# Creating table of 1 and 0s 
+preds_1 <- sum(test$prior)
+preds_0 <- 88 - sum(test$prior)
+label_1 <- sum(test$test_label)
+label_0 <- 88 - sum(test$test_label)
+
+tibble(value = c(1,0),
+       preds = c(preds_1, preds_0),
+       labels = c(label_1, label_0))
+
+test %>%
+  mutate(correct = ifelse(prior == test_label, 1, 0)) %>%
+  summarise(accuracy = sum(correct)/n())
+```
+
+
+## 3. Fit LASSO regression
+
+### Question 3.1
+
+We are going to use the `glmnet` library to fit the LASSO regression. Load the package.
+
+The syntax for the glmnet model is as follows:
+`lasso <- glmnet(x = train, y = train_label)`
+
+This defaults to linear regression. To do logistic regression you can fit the same model, but add
+`lasso_logist <- glmnet(x = train, y = train_label, family = 'binomial')`
+
+Fit a LASSO linear regression.
+
+```{r}
+
+library(glmnet)
+train_df <- as_tibble(nyt_list[[1]])
+lasso <- glmnet(x = train_df, y = train_label)
+
+```
+
+
+### Question 3.2 
+
+The LASSO function automatically fits the model for several values of $\lambda$, and produces $\beta$ values for all covariates for each value of $\lambda$ all of which is found in the object `lasso$beta`.  
+
+Sum up the absolute values of `lasso$beta` for each column. Plot that against `lasso$lambda`. What generally happens as $\lambda$ increases?  
+
+```{r}
+
+
+tibble(beta = colSums(abs(lasso$beta)),
+       lamdba = lasso$lambda) %>%
+  ggplot(aes(x = lamdba, y = beta)) +
+  geom_point()
+
+
+```
+
+Generally, as lambda increases, beta decreases.
+
+### Question 3.3
+
+There are different methods to selecting lambda, which we set aside for another day.  Today, we're going to set a particular value of lambda arbitrarily and then assess its performance. We will set lambda to 0.05.
+
+Formulate predictions for the training set using the following syntax:
+`lasso_pred <- predict(lasso, newx=train, s = 0.05 )`
+
+- `lasso` is the lasso regression
+- `newx` are the values you want to predict
+- `s` is the value of lambda.
+
+Classify the observations using a threshold of 0.5. Then assess the accuracy of those predictions by comparing them to the training set labels and create a confusion matrix. Do the same but use a threshold of prior information on the training set -- the proportion of 1s. Which threshold is better?
+
+```{r}
+lasso_pred <- predict(lasso, newx=train_df, s = 0.05)
+```
+
+
+### Question 3.4 
+
+Now formulate predictions for the test set,  classify the documents as national or not with a threshold using the prior proportion of 1 labels in the training set as well as 0.5, and assess the accuracy of those predictions by comparing them to the test set labels.  What do you notice about the quality of the predictions from LASSO relative to the predictions from OLS?

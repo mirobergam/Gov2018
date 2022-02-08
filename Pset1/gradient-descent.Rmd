@@ -78,6 +78,7 @@ f.prime(-2, 0.001)
 
 ```
 
+f.prime(-2,0.001) outputs -0.108
 
 
 ## Question 3 [3 pts]
@@ -139,6 +140,13 @@ output <- grad.des(-2, 10000)
 ```
 
 ```{r}
+output[[2]]
+output[[3]]
+```
+
+Starting from -2, the minimum my function found was (-0.33, -0.367). Its path is plotted in red below. 
+
+```{r}
 
 # Plotting path of gradient descent function
 
@@ -148,7 +156,10 @@ fdata %>%
   ggplot(aes(x = V1, y = ys)) + 
   geom_point() + 
   geom_function(fun = q1) + 
-  geom_line(data = dat, aes(x, y), color = "red")
+  geom_line(data = dat, aes(x, y), color = "red") +
+  labs(title = "Gradient descent on f(x) starting at x = -2",
+       x = "x",
+       y = "f(x)")
 ```
 
 
@@ -192,8 +203,11 @@ hist(minimas_x, breaks = 50)
 
 ```{r}
 minimas <- cbind(minimas_x, minimas_y)
+
+# Locating the true global minimum using the function given in the problem
+
 global_min <- minimas[which(minimas[,2]==min(minimas[,2])), 1]
 global_min
 ```
 
-The global minimum is 203655. As you can see in the histogram, the gradient descent function found -0.33 and 2 most often, as they are the two most significant minima. 
+The global minimum is 2.03655. As you can see in the histogram, the gradient descent function came upon -0.33 and 2 most often, as they are the two most significant minima in the plot. 
