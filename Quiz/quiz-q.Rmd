@@ -1,0 +1,280 @@
+---
+title: "Gov 2018 Quiz: Newton-Raphson Method & Post Double Selection"
+author: "Sooahn Shin"
+date: "February 15, 2022"
+output:
+  pdf_document: default
+  html_document: default
+header-includes:
+  - \usepackage{tikz}
+  - \newcommand{\obs}{circle, draw, thick}
+---
+
+\noindent Please upload answers to all questions (including computational questions, any related graphics and R code \emph{with comments}), in .rmd \emph{and} knitted pdf forms to Gradescope by Thursday 11:59 pm. For any problems that require calculations, please show your work. Finally, note that only clarification questions can be asked for the quiz and you cannot consult your answer with other students.
+
+
+## Part 1: Newton-Raphson Method
+
+In this part, we seek to solve the optimization problem $\min_x F(x)$ where $F: \mathbb{R} \rightarrow \mathbb{R}$ is a twice differentiable function. We will use Newton-Raphson method to find a solution for $f(x) = 0$ (i.e., the root(s) of $f(x)$) where $f$ is the derivative of $F$.
+
+### Question 1: Newton-Raphson method function (2 pts)
+
+Write a function `newton.raphson` with the following characteristics:
+\begin{itemize}
+\item 4 arguments: 
+  \begin{itemize}
+  \item $f$: Function for which we are searching for a solution $f(x)=0$.
+  \item $x_0$: Initial guess for a solution $f(x)=0$.
+  \item Tolerance (e.g., $1\times10^{-5}$): If $x_{(i+1)} - x_{(i)} <$ tolerance, then stop the iterations. In other words, stop when the improvement drops below a threshold.
+  \item Maximum number of iterations (e.g., $10000$)
+  \end{itemize}
+\item For $i$-th iteration, update your guess to be $x_{(i+1)} = x_{(i)} - \frac{f(x_{(i)})}{f^\prime(x_{(i)})}$, where $f^\prime$ is a derivative of $f$
+\end{itemize}
+You may use `f.prime(x)` from Problem Set 1.
+
+```{r}
+
+newton.raphson <- function(f, x, tol, max_iter) {
+  n <- 0
+  step <- tol + 10
+  df <- function(x, d = 0.001) { 
+    (f(x+d) - f(x-d)) / (2*d)
+  }
+  while(step > tol && n < max_iter) {
+    n <- n + 1
+    if(df(x) == 0) {
+      break
+    } 
+    step <- -(f(x)/df(x))
+    print(step)
+    x <- x + step
+    
+    if(step < tol) {
+      print("Meep")
+    }
+  }
+  return(list(x, f(x), n))
+}
+```
+
+### Question 2: Example with one root (1 pt)
+
+Suppose we want to find a global minimum of $F_1(x) = x^2 - 2x + 4$ (see figure below). Create a function called `f1` that computes the first derivative of $F_1$ at given point $x$. Then using the function `newton.raphson` with the initial guess of $x_0 = -2$, find the root of $f_1$.
+
+```{r echo=FALSE}
+F1 <- function(x) {
+  x^2 - 2*x + 4
+}
+curve(F1, col = 'blue', lwd = 2, xlim=c(-5,7), ylim=c(-1,15), ylab='F(x)')
+abline(h=0, lty = 2)
+abline(v=0, lty = 2)
+```
+
+```{r}
+f1 <- function(x) {
+  return((2 * x) - 2)
+}
+
+newton.raphson(f1, -2, 0.00001, 1000)
+```
+
+
+### Question 3: Example with two roots (1 pt)
+
+Now, suppose we want to find a global minimum of $F_2(x) = x^4 - 5x^3 + x^2 + 21x + 30$ (see figure below). Create a function called `f2` that computes the first derivative of $F_2$ at given point $x$. Then run the function `newton.raphson` with the initival guess of $x_0 = 4$. Do you think the approximated root of the function is the global minimum of $F_2$? If not, what can be done to find the global minimum?
+
+```{r echo=FALSE}
+F2 <- function(x) {
+  x^4 - 5*x^3 + x^2 + 21*x + 12
+}
+curve(F2, col = 'blue', lwd = 2, xlim=c(-5,7), ylim=c(-10,80), ylab='F(x)')
+abline(h=0, lty = 2)
+abline(v=0, lty = 2)
+```
+```{r}
+f2 <- function(x) {
+  4*x^3 - 15*x^2 + 2*x + 21
+}
+
+newton.raphson(f2, 4, 0.00001, 1000)
+
+curve(F2, col = 'blue', lwd = 2, xlim=c(-5,7), ylim=c(-10,80), ylab='F(x)')
+
+
+```
+
+
+
+## Part 2: Post Double Selection
+
+In this part, we will conduct simulation study of post double selection from Belloni, Chernozhukov, and Hansen (2014). Using a synthetic data, we will investigate the following (partially) linear model with high-dimensional covariates. 
+\begin{align*}
+Y_i &= D_i \alpha +  X_i^c \beta + X_i^y \delta + \epsilon_{1i} \\
+D_i &= X_i^c \gamma +  X_i^e \sigma + \epsilon_{2i} 
+\end{align*}
+where 
+\begin{itemize}
+\item $Y_i$ is the outcome variable ($n$ by $1$ vector);
+\item $D_i$ is the policy (treatment) variable ($n$ by $1$ vector);
+\item $X_i^c$ is a set of confounders we would like to control ($n$ by $p_c$ matrix);
+\item $X_i^y$ is a set of covariates that only has an impact on $Y_i$ ($n$ by $p_y$ matrix);
+\item $X_i^e$ is a set of exogenous variables that only affects $D_i$ ($n$ by $p_e$ matrix);
+\item $\mathbb{E} [\epsilon_{1i} \mid D_i, X_i^c, X_i^y] = 0$ and $\mathbb{E} [\epsilon_{2i} \mid X_i^c, X_i^e] = 0$.
+\end{itemize}
+
+Under the assumption of (approximate) sparsity and some regularity conditions, we will estimate $\alpha$, the impact of $D_i$ on $Y_i$. We have a high-dimensional covariates $X_i = X_i^c \cup X_i^y \cup X_i^e \cup X_i^u$ from which we may select $X_i^c$, $X_i^y$, and $X_i^e$. Note that $X_i^u$ does not affect $D_i$ nor $Y_i$; we will use exact sparse regime instead of approximate sparse regime in the simulation study for simplicity. We will compare two different estimation strategies, one with usual post model selection and the other with post double selection. Please check the lecture slides and the paper for more details. 
+
+\begin{center}
+\begin{tikzpicture}
+    \node[\obs] (xc) at (0,1.5) {$X^c$};
+    \node[\obs] (xe) at (-2, 1.5) {$X^e$};
+    \node[\obs] (xy) at (2, 1.5) {$X^y$};
+    \node[\obs] (d) at (-1, 0) {$D$};
+    \node[\obs] (y) at (1, 0) {$Y$};
+    \draw[->, >=stealth, thick] (xe) -- (d);
+    \draw[->, >=stealth, thick] (xc) -- (d);
+    \draw[->, >=stealth, thick] (xc) -- (y);
+    \draw[->, >=stealth, thick] (xy) -- (y);
+    \draw[->, >=stealth, thick] (d) -- (y);
+\end{tikzpicture}
+\end{center}
+
+A note on Causal Inference: Note that we would need additional assumptions to interpret the regression coefficient $\alpha$ as an unbiased estimator for an Average Treatment Effect (ATE). In this question, we will ignore the issues with identification of the causal effect and focus on investigating the post double selection method.
+
+### Question 1: Creating synthetic data (1 pt)
+
+We will start by creating a function that generates synthetic data given true parameters. The data generating process (DGP) we will use is as follows:
+
+\begin{enumerate}
+\item Generate $Z_{i1}^c, \ldots, Z_{i,p_c}^c$, $Z_{i1}^y, \ldots, Z_{i,p_y}^y$, $Z_{i1}^e, \ldots, Z_{i,p_y}^e$, and $Z_{i1}^u, \ldots, Z_{i,p}^u$ as follows:
+\begin{itemize}
+\item $Z_{ik}^c \sim \mathcal{N}(0,1)$ for $k = 1, \ldots, p_c$
+\item $Z_{ik}^y \sim \mathcal{N}(0,1)$ for $k = 1, \ldots, p_y$
+\item $Z_{ik}^e \sim \mathcal{N}(0,1)$ for $k = 1, \ldots, p_e$
+\item $Z_{ik}^u \sim \mathcal{N}(0,1)$ for $k = 1, \ldots, p_u$
+\end{itemize}
+\item Let $X_i^c$, $X_i^y$, $X_i^e$, and $X_i^u$ be a function of $(Z_{i1}^c, \ldots, Z_{i,p_c}^c)$, $(Z_{i1}^y, \ldots, Z_{i,p_y}^y)$, $(Z_{i1}^e, \ldots, Z_{i,p_e}^e)$, and $(Z_{i1}^u, \ldots, Z_{i,p_u}^u)$ respectively as follows:
+\begin{itemize}
+\item $X_i^c = (Z_{i1}^c, Z_{i2}^c, \ldots, Z_{i,p_c}^c, {Z_{i1}^c}^2, {Z_{i2}^c}^2, \ldots, {Z_{i,p_c}^c}^2, Z_{i1}^c\cdot Z_{i2}^c, Z_{i2}^c\cdot Z_{i3}^c, \ldots, Z_{i,p_c-1}^c\cdot Z_{i,p_c}^c)^\top$
+\item $X_i^y = (Z_{i1}^y, Z_{i2}^y, \ldots, Z_{i,p_y}^y, {Z_{i1}^y}^2, {Z_{i2}^y}^2, \ldots, {Z_{i,p_y}^y}^2, Z_{i1}^y\cdot Z_{i2}^y, Z_{i2}^y\cdot Z_{i3}^y, \ldots, Z_{i,p_y-1}^y\cdot Z_{i,p_y}^y)^\top$
+\item $X_i^e = (Z_{i1}^e, Z_{i2}^e, \ldots, Z_{i,p_e}^e, {Z_{i1}^e}^2, {Z_{i2}^e}^2, \ldots, {Z_{i,p_e}^e}^2, Z_{i1}^e\cdot Z_{i2}^e, Z_{i2}^e\cdot Z_{i3}^e, \ldots, Z_{i,p_e-1}^e\cdot Z_{i,p_e}^e)^\top$
+\item $X_i^u = (Z_{i1}^u, Z_{i2}^u, \ldots, Z_{i,p_u}^u, {Z_{i1}^u}^2, {Z_{i2}^u}^2, \ldots, {Z_{i,p_u}^u}^2, Z_{i1}^u\cdot Z_{i2}^u, Z_{i2}^u\cdot Z_{i3}^u, \ldots, Z_{i,p_u-1}^u\cdot Z_{i,p_u}^u)^\top$
+\end{itemize}
+\item Let $X_i = \begin{pmatrix} X_i^c & X_i^y & X_i^e & X_i^u \end{pmatrix}$
+\item Generate regression coefficients as follows:
+\begin{itemize}
+\item $\alpha = 0.5$
+\item $\beta_j \sim \mathcal{N}(0.1,0.01^2)$ for $j = 1, \ldots, (3 p_c-1)$
+\item $\delta_j \sim \mathcal{N}(0,0.01^2)$ for $j = 1, \ldots, (3 p_y-1)$
+\item $\gamma_j \sim \mathcal{N}(0.8,0.01^2)$ for $j = 1, \ldots, (3 p_c-1)$
+\item $\sigma_j \sim \mathcal{N}(0,0.01^2)$ for $j = 1, \ldots, (3 p_e-1)$
+\end{itemize}
+\item Generate random noise as follows:
+\begin{itemize}
+\item $\epsilon_{1i} \sim \mathcal{N}(0,1)$ for $i = 1, \ldots, n$
+\item $\epsilon_{2i} \sim \mathcal{N}(0,1)$ for $i = 1, \ldots, n$
+\end{itemize}
+\item Let $D_i = X_i^c \gamma +  X_i^e \sigma + \epsilon_{2i}$ and $Y_i = D_i \alpha +  X_i^c \beta + X_i^y \delta + \epsilon_{1i}$.
+\end{enumerate}
+
+Using this DGP and the sample codes below, write a function `generate_synth_data` which generates the data and parameters.
+
+```{r}
+generate_synth_data <- function(n = 100, # number of observations
+                                pc = 5, # dimensionality (size of dimensions) of Z_i^c
+                                py = 2, # dimensionality of Z_i^y
+                                pe = 2,  # dimensionality of Z_i^e
+                                pu = 30,  # dimensionality of Z_i^u
+                                alpha = 0.5,
+                                beta = NULL,
+                                delta = NULL,
+                                gamma = NULL,
+                                sigma = NULL,
+                                seed.number = 2018 
+                                ) {
+  set.seed(seed.number)
+  
+  #-- TODO 1: Generate Z^c, Z^y, Z^e, and Z^u (Hint: use rnorm())
+  Zc = matrix(NA, nrow = n, ncol = pc)
+  Zy = matrix(NA, nrow = n, ncol = py)
+  Ze = matrix(NA, nrow = n, ncol = pe)
+  Zu = matrix(NA, nrow = n, ncol = pu)
+  # Your code here
+  
+  #-- TODO 2: Create X^c, X^y, X^e, and X^u
+  Xc = matrix(NA, nrow = n, ncol = pc*3-1)
+  Xy = matrix(NA, nrow = n, ncol = py*3-1)
+  Xe = matrix(NA, nrow = n, ncol = pe*3-1)
+  Xu = matrix(NA, nrow = n, ncol = pu*3-1)
+  # Your codes here
+  colnames(Xc) = paste0("Xc", 1:(pc*3-1))
+  colnames(Xy) = paste0("Xy", 1:(py*3-1))
+  colnames(Xe) = paste0("Xe", 1:(pe*3-1))
+  colnames(Xu) = paste0("Xu", 1:(pu*3-1))
+  
+  #-- 3: Create X
+  X = cbind(Xc, Xy, Xe, Xu)
+  
+  #-- TODO 4: Generate regression coefficients
+  if (is.null(alpha)) {
+    alpha = rnorm(1, mean = 0, sd = 2) # example
+  }
+  if (is.null(beta)) {
+    # Your codes here
+  }
+  if (is.null(delta)) {
+    # Your codes here
+  }
+  if (is.null(gamma)) {
+    # Your codes here
+  }
+  if (is.null(sigma)) {
+    # Your codes here
+  }
+  
+  #-- TODO 5: Generate random noise
+  epsilon1 = rep(NA, n)
+  epsilon2 = rep(NA, n)
+  # Your codes here
+  
+  #-- TODO 6: Create D and Y
+  D = rep(NA, n)
+  Y = rep(NA, n)
+  # Your codes here
+  colnames(D) = "D"
+  colnames(Y) = "Y"
+  
+  # cat("## num of observations:",n,"\n## num of predictors:",ncol(X),"\n")
+  
+  res = list(X = X, D = D, Y = Y, 
+             alpha = alpha, beta = beta, delta = delta, gamma = gamma, sigma = sigma)
+  return(res)
+}
+
+```
+
+### Question 2: Lasso methods (2 pts)
+
+Generate synthetic data using the function `generate_synth_data` with following arguments:
+
+```{r}
+n = 100; pc = 5; py = 2; pe = 2; pu = 30
+alpha = 0.5
+set.seed(2018)
+beta = matrix(rnorm(pc*3-1, mean = 0.1, sd = 0.01), ncol = 1)
+delta = matrix(rnorm(py*3-1, mean = 0, sd = 0.01), ncol = 1)
+gamma = matrix(rnorm(pc*3-1, mean = 0.8, sd = 0.01), ncol = 1)
+sigma = matrix(rnorm(pe*3-1, mean = 0, sd = 0.01), ncol = 1)
+```
+
+Estimate $\alpha$ using `glmnet` with two different methods: post single lasso and post double lasso. For post double lasso, use two different packages for the estimation: `glmnet` and `hdm` (the latter is written by the authors of the paper). Briefly discuss the results.
+
+Hint: For `glmnet`, use `cv.glmnet` in place of `glmnet` --- this is a cross-validated glmnet --- and `coef(your-glmnet-object, s = "lambda.1se")`  functions to select $\lambda$ value. For `hdm`, the syntax is as follows: `hdm::rlassoEffect(x=your-X,d=your-D,y=your-Y,method="double selection")` 
+Note that the estimates may differ between `glmnet` and `hdm` due to different default methods of selecting for $\lambda$.
+
+
+### Question 3: Monte-Carlo simulation (3 pts)
+
+Note that the result from Question 2 is based on a single simulation. Now, we will conduct a Monte-Carlo simulation where we generate synthetic data multiple times (e.g., $1000$ iterations) and compare the distribution of $\alpha$ for each method. Plot the histogram of three distributions of $\alpha$ (single LASSO, double LASSO with `glmnet`, and double LASSO with `hdm`). Briefly discuss the results and the difference between two methods.
+
+Hint: Make sure to set different seed number for each iteration while using the same parameters given in the previous question.

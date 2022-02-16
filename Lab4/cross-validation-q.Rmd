@@ -1,0 +1,253 @@
+---
+title: 'Gov 2018: Lab 4 Cross Validation'
+author:
+- 'Adeline Lo'
+date: 'Tuesday February 15, 2022'
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+This lab on Ridge Regression and the Lasso in R is based off of p. 251-255 of "Introduction to Statistical Learning with Applications in R" by Gareth James, Daniela Witten, Trevor Hastie and Robert Tibshirani. 
+
+# CV Ridge Regression and the Lasso
+
+```{r,warnings=FALSE}
+rm(list=ls())
+library(ISLR)
+library(glmnet)
+library(dplyr)
+library(tidyr)
+#set seed
+lab.seed<-202202
+```
+
+Use the `glmnet` package in order to perform ridge regression and the lasso. The main function in this package is `glmnet()`, which can be used to fit ridge regression models, lasso models, and more. 
+
+Load and remove `NA`s.
+
+
+```{r}
+Hitters = na.omit(Hitters)
+```
+
+Execute a ridge regression and the lasso in order to predict `Salary` on the `Hitters` data. 
+
+Set up data:
+
+
+```{r}
+x = model.matrix(Salary~., Hitters)[,-1] # trim off the first column
+                                         # leaving only the predictors
+y = Hitters$Salary
+```
+
+The `model.matrix()` function is particularly useful for creating $x$; not only does it produce a matrix corresponding to the 19 predictors but it also automatically transforms any qualitative variables into dummy variables.
+The latter property is important because `glmnet()` can only take numerical,
+quantitative inputs.
+
+## Question 1. Ridge Regression
+The `glmnet()` function has an alpha argument that determines what type
+of model is fit. If `alpha = 0` then a ridge regression model is fit, and if `alpha = 1`
+then a lasso model is fit. Fit a ridge regression model on `x` and `y` using the grid of lambda values from below.
+
+
+```{r}
+grid = 10^seq(10, -2, length = 100)
+
+# Defining model with alpha = 0 for ridge, and grid of lambdas
+ridge <- glmnet(x, y, lambda = grid, alpha = 0)
+
+```
+
+By default the `glmnet()` function performs ridge regression for an automatically
+selected range of $\lambda$ values. However, here we have chosen to implement
+the function over a grid of values ranging from $\lambda = 10^{10}$ to $\lambda = 10^{-2}$, essentially covering the full range of scenarios from the null model containing only the intercept, to the least squares fit. 
+
+As we will see, we can also compute model fits for a particular value of $\lambda$ that is not one of the original
+grid values. Note that by default, the `glmnet()` function standardizes the variables so that they are on the same scale. To turn off this default setting, use the argument `standardize = FALSE`.
+
+Associated with each value of $\lambda$ is a vector of ridge regression coefficients, stored in a matrix that can be accessed by `coef()`. In this case, it is a $20 \times 100$ matrix, with 20 rows (one for each predictor, plus an intercept) and 100
+columns (one for each value of $\lambda$). Plot your coefficients from the ridge regression output with `plot(your.model.object)`.
+
+```{r}
+# Dimensions of the coefs of the ridge model
+dim(coef(ridge))
+# Plot of the l1 norm
+plot(ridge)
+```
+
+We expect the coefficient estimates to be much smaller, in terms of $l_2$ norm, when a large value of $\lambda$ is used, as compared to when a small value of $\lambda$ is used. Set $\lambda$ to its 50th value. What are the coefficients at this value?
+What's their $l_2$ norm (remove the intercept value)?
+
+
+```{r}
+# 50th lambda value
+ridge$lambda[50]
+
+# Coefficients of model at the 60th lambda value
+coef(ridge)[,50]
+
+# Coefficients at 50 with the intercept removed
+coefs <- coef(ridge)[-1,50]
+
+ # Calculate l2 norm
+sqrt(sum(coefs^2))
+
+```
+
+In contrast, what are the coefficients when $\lambda$ is at its 60th value? Their $l_2$
+norm? Note the much larger $l_2$ norm of the coefficients associated with this
+smaller value of $\lambda$.
+
+
+```{r}
+# 60th lambda value
+ridge$lambda[60]
+
+# Coefficients to 60 with the intercept removed
+coef(ridge)[,60]
+
+# Coefficients at 60 with the intercept removed
+coefs <- coef(ridge)[-1,60]
+
+ # Calculate l2 norm
+sqrt(sum(coefs^2))
+
+```
+
+
+Split the samples into a 80% training set and a 20% test set in order
+to estimate the test error of ridge regression and the lasso.
+
+
+```{r}
+set.seed(lab.seed)
+
+# 80% of the data to train
+train = sample_frac(Hitters, 0.8)
+
+# 20% to test
+test = setdiff(Hitters, train)
+
+# Making X's using same function as before
+x_train = model.matrix(Salary~., train)[,-1]
+x_test = model.matrix(Salary~., test)[,-1]
+
+# Making Y's
+y_train = train$Salary
+y_test = test$Salary
+```
+
+Next fit a ridge regression model on the training set, and evaluate
+its MSE (mean squared error) on the test set, using $\lambda = 40$. Note the use of the `predict()`
+function again: get predictions for a test set making sure to use`newx` argument.
+
+
+```{r}
+
+set.seed(lab.seed)
+ridge = glmnet(x_train, y_train, lambda = 40, alpha = 0)
+ridge_pred = predict(ridge, newx = x_test)
+mean((ridge_pred - y_test)^2)
+
+```
+
+Instead of arbitrarily choosing $\lambda = 40$, it would be better to
+use cross-validation to choose the tuning parameter $\lambda$. We can do this using
+the built-in cross-validation function, `cv.glmnet()`. By default, the function
+performs 10-fold cross-validation, though this can be changed using the
+argument `nfolds`. Set folds to 10 and calculate the $\lambda$ that best minimizes the training MSE (`lambda.min` item in object returned from `cv.glmnet()`).
+
+
+```{r}
+set.seed(lab.seed)
+
+cv.fit <- cv.glmnet(x_train, y_train, alpha = 0, nfolds = 10)
+best_lamb <- cv.fit$lambda.min
+best_lamb
+```
+
+
+Plot the MSE as a function of $\lambda$ by using `plot()` on our returned object from our call to `cv.glmnet`.
+
+```{r}
+plot(cv.fit)
+```
+
+What is the test MSE associated with this value of $\lambda$?
+
+```{r}
+
+preds_best = predict(ridge, s = best_lamb, newx = x_test)
+
+mean((preds_best - y_test)^2)
+
+```
+
+The log of the best lambda that we found is 0.98, which corresponds to the lowest MSE on the plot, dipping below 120000. 
+
+## Question 2. The Lasso
+
+You just executed ridge regression with a wise choice of $\lambda$. Can lasso yield either a more accurate or a more interpretable model than ridge regression? Fit a lasso model, however, this time use the argument `alpha=1`.
+Other than that change, proceed just as you did in fitting a ridge model. Plot your model object coefficients.
+
+```{r}
+set.seed(lab.seed)
+
+grid = 10^seq(10, -2, length = 100)
+
+lasso <- glmnet(x_train, y_train, lambda = grid, alpha = 1)
+
+plot(lasso)
+```
+
+Now run the model again, this time performing cross-validation with folds equal to 10.
+Plot the model object. Then using the lambda that minimizes your cross validated training MSE, compute the associated testing MSE:
+
+
+```{r}
+set.seed(lab.seed)
+
+lasso_cv <- cv.glmnet(x_train, y_train, lambda = grid, alpha = 1)
+plot(lasso_cv)
+bestlam = lasso_cv$lambda.min 
+lasso_pred = predict(lasso_cv, s = bestlam, newx = x_test) 
+mean((lasso_pred - y_test)^2) 
+
+```
+
+
+## Question 3. K-fold cross validation
+
+Conduct K-fold cross validation for the ridge and lasso, with $k\in\{5,7,9,11,13,15\}$. Assess the models at each $k$ value by calculating the risk/prediction error in the test set and suggest the best $k$ for each. Suggest the best final model.
+
+```{r}
+set.seed(lab.seed)
+
+ks <- c(5,7,9,11,13,15)
+lasso_mse <- c()
+ridge_mse <- c()
+
+for(k in ks) {
+  cv.lasso = cv.glmnet(x_train, y_train,
+                       alpha = 1, nfolds = k)
+  cv.ridge = cv.glmnet(x_train, y_train,
+                       alpha = 0, nfolds = k)
+  preds.lasso = predict(cv.lasso, 
+                        s = cv.lasso$lambda.min, 
+                        newx = x_test)
+  preds.ridge = predict(cv.ridge,
+                        s = cv.ridge$lambda.min,
+                        newx = x_test)
+  
+  lasso_mse <- c(lasso_mse, 
+                 mean((preds.lasso - y_test)^2))
+  
+  ridge_mse <- c(ridge_mse, 
+                 mean((preds.ridge - y_test)^2))
+}
+
+```

@@ -30,7 +30,7 @@ We will work with `train` and `train_label` to build our prediction models. We w
 
 Put these components in individual objects (name each component as a separate object that is easy to understand for you and the reader).
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 # Load library and tidyverse
 library(tidyverse)
 load("NYT.RData")
@@ -90,7 +90,7 @@ full_reg <- lm(train_label ~ . , data = train)
 #summary(full_reg)
 ```
  
-Many of the coefficient values are listed as NA in the summary(), with a message stating that "801 not defined because of singularities". I believe this means that 4/5ths of the words were dropped because they were very rare, too rare to be useful in detecting a trend. 
+Many of the coefficient values are listed as NA in the summary(), with a message stating that "801 not defined because of singularities". I believe this means that over 4/5ths of the words were dropped because they were very rare, too rare to be useful in detecting a trend. 
 
 ### Question 2.2
 
@@ -98,7 +98,8 @@ We are now going to make predictions using the training data and the test data a
 
 Using the `predict` function, make predictions for all observations in the training set. Then, classify the documents as national or not using a threshold of 0.5. Assess your classification to the actual data. Create a 2x2 table of the predicted train labels and true train label and note your findings.
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
+library(gt)
 
 set.seed(12019)
 
@@ -115,15 +116,19 @@ preds_0 <- 200 - sum(train$preds)
 label_1 <- sum(train$train_label)
 label_0 <- 200 - sum(train$train_label)
 
+# Formatting the table
 tibble(value = c(1,0),
        preds = c(preds_1, preds_0),
-       labels = c(label_1, label_0))
+       labels = c(label_1, label_0)) %>%
+  gt()
 
+# Calculating prediction accuracy
 train %>%
   mutate(correct = ifelse(preds == train_label, 1, 0)) %>%
   summarise(accuracy = sum(correct)/n())
 ```
 
+The model predicted exactly the same as the true labels (50 1s, 150 0s), with an accuracy of 1. This is because it is predicting the data it was trained on. 
 
 ### Question 2.3
 
@@ -131,7 +136,7 @@ Now, use the model to make a prediction for the *test* data and classify using a
 
 Assess the accuracy of your classification by comparing it to the actual test data. What do you notice? What would happen if you randomly guessed the test labels using a prior on the probability of 1 as the proportion of 1s in the train labels? Remember to `set.seed(12019)`. Compare your findings between the two methods.
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 
 set.seed(12019)
 
@@ -148,13 +153,16 @@ preds_0 <- 88 - sum(test$preds)
 label_1 <- sum(test$test_label)
 label_0 <- 88 - sum(test$test_label)
 
+# Formatting table
 tibble(value = c(1,0),
        preds = c(preds_1, preds_0),
-       labels = c(label_1, label_0))
+       labels = c(label_1, label_0)) %>%
+  gt()
 
+# calculating prediction accuracy
 test %>%
   mutate(correct = ifelse(preds == test_label, 1, 0)) %>%
-  summarise(accuracy = sum(correct)/n())
+  summarise(accuracy_model = sum(correct)/n())
 ```
 
 ```{r}
@@ -176,15 +184,19 @@ preds_0 <- 88 - sum(test$prior)
 label_1 <- sum(test$test_label)
 label_0 <- 88 - sum(test$test_label)
 
+# Formatting table
 tibble(value = c(1,0),
        preds = c(preds_1, preds_0),
-       labels = c(label_1, label_0))
+       labels = c(label_1, label_0)) %>%
+  gt()
 
+# Calculating accuracy
 test %>%
   mutate(correct = ifelse(prior == test_label, 1, 0)) %>%
-  summarise(accuracy = sum(correct)/n())
+  summarise(accuracy_prior = sum(correct)/n())
 ```
 
+Interestingly, using a simple prior was more accurate, 72.7% vs. 45.5%. We can see from the tables that this greater accuracy was because the model predicted 1s far more often than the 'prior' rate of 1s in the training set. 
 
 ## 3. Fit LASSO regression
 
@@ -203,7 +215,13 @@ Fit a LASSO linear regression.
 ```{r}
 
 library(glmnet)
-train_df <- as_tibble(nyt_list[[1]])
+
+# Pulling out train and test set
+train_df <- nyt_list[[1]]
+test_df <- nyt_list[[3]]
+
+# Defining lasso model
+# Must seperate true labels and x's for this func
 lasso <- glmnet(x = train_df, y = train_label)
 
 ```
@@ -217,16 +235,16 @@ Sum up the absolute values of `lasso$beta` for each column. Plot that against `l
 
 ```{r}
 
-
+# Plotting lambdas against betas
 tibble(beta = colSums(abs(lasso$beta)),
        lamdba = lasso$lambda) %>%
   ggplot(aes(x = lamdba, y = beta)) +
-  geom_point()
+  geom_point() 
 
 
 ```
 
-Generally, as lambda increases, beta decreases.
+As lambda increases, beta generally decreases.
 
 ### Question 3.3
 
@@ -242,10 +260,70 @@ Formulate predictions for the training set using the following syntax:
 Classify the observations using a threshold of 0.5. Then assess the accuracy of those predictions by comparing them to the training set labels and create a confusion matrix. Do the same but use a threshold of prior information on the training set -- the proportion of 1s. Which threshold is better?
 
 ```{r}
+
+# Making predictions on train data
 lasso_pred <- predict(lasso, newx=train_df, s = 0.05)
+
+rows <- nrow(lasso_pred)
+
+#Making pred and true df
+predictions <- tibble(preds = lasso_pred[,1],
+       true = train$train_label) %>%
+  mutate(preds = ifelse(preds > 0.5, 1, 0))
+
+# Accuracy with a 0.5 threshold
+accuracy_thres_50 <- predictions %>%
+  mutate(correct = ifelse(true == preds, 1, 0)) %>%
+  summarise(accuracy_thres_50 = sum(correct)/200)
+
+accuracy_thres_50
+
+# Accuracy with a 0.25 threshold
+accuracy_thres_25 <- tibble(preds = lasso_pred[,1],
+       true = train$train_label) %>%
+  mutate(preds = ifelse(preds > 0.25, 1, 0)) %>%
+  mutate(correct = ifelse(true == preds, 1, 0)) %>%
+  summarise(accuracy_thres_25 = sum(correct)/200)
+
+accuracy_thres_25
+
+library(caret)
+# Confusion matrix 
+confusionMatrix(table(predictions$preds, predictions$true)) 
 ```
 
+Using the threshold of 0.25 very slightly improves the accuracy. from 90.5 to 91.5.
 
 ### Question 3.4 
 
 Now formulate predictions for the test set,  classify the documents as national or not with a threshold using the prior proportion of 1 labels in the training set as well as 0.5, and assess the accuracy of those predictions by comparing them to the test set labels.  What do you notice about the quality of the predictions from LASSO relative to the predictions from OLS?
+
+```{r}
+
+# Making test preds
+lasso_pred <- predict(lasso, newx=test_df, s = 0.05)
+
+rows <- nrow(lasso_pred)
+
+# Accuracy threshold at 0.5
+accuracy_thres_50 <- tibble(preds = lasso_pred,
+       true = test$test_label) %>%
+  mutate(preds = ifelse(preds > 0.5, 1, 0)) %>%
+  mutate(correct = ifelse(true == preds, 1, 0)) %>%
+  summarise(accuracy_thres_50 = sum(correct)/88)
+
+accuracy_thres_50
+
+# Accuracy threshold at 0.25
+accuracy_thres_25 <- tibble(preds = lasso_pred,
+       true = test$test_label) %>%
+  mutate(preds = ifelse(preds > 0.25, 1, 0)) %>%
+  mutate(correct = ifelse(true == preds, 1, 0)) %>%
+  summarise(accuracy_thres_25 = sum(correct)/88)
+
+accuracy_thres_25
+
+```
+
+The accuracies came out to be the same regardless of the threshold being 0.5 and 0.25. Overall, these LASSO predictions are a vast improvement upon the linear model, which had a sub-50% prediction accuracy on the test data compared to the 80%+ prediction accuracies of LASSO. 
+

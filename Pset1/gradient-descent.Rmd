@@ -61,7 +61,7 @@ fdata %>%
 ## Question 2 [2 pts]
 We will approximate the derivative $f'(x)$ by replacing $f$ by a linear function within a small window. We choose some small value $\delta>0$ and compute:
 \[
-\hat{f}_\delta (x):=\frac{f(x+\delta)-f(x-\delta)}{|[x-\delta,x+\delta]|} = \frac{f(x+\delta)-f(x-\delta)}{2\delta}
+\hat{f}_\delta (x):=\frac{f(x+\delta)-f(x-\delta)}{|[x-\delta,x+\delta]|} = \frac{f(x+\delta)-f(x-\delta)}{2\delta} 
 \]
 and use $\hat{f}_\delta (x)$ as our estimate of $f'(x)$. The function `f.prime()` we ask you to write below implements $\hat{f}_\delta (x)$.
 
