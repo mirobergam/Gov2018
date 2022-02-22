@@ -1,0 +1,197 @@
+---
+title: 'Gov 2018: Lab 5 Random Forests'
+author:
+- 'Your name: '
+date: 'February 22, 2022'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+This exercise is based off of Muchlinski, David, David Siroky, Jingrui He, and Matthew Kocher. 2016. "Comparing Random Forest with Logistic Regression for Predicting Class-Imbalanced Civil War Onset Data". \emph{Political Analysis}.
+
+
+Descriptions of the relevant variables in the data file `data_full.rds` are:
+
+ Name                             Description
+ -------------------------------- ----------------------------------------------------------
+ `warstds`                        Factor, `peace` and `war`
+ `year`                           Numeric for year of obs
+ 
+ And a list of 90 covariates from the Sambanis dataset: "ager", "agexp", "anoc", "army85", "autch98", "auto4", "autonomy", "avgnabo", "centpol3", "coldwar", "decade1", "decade2", "decade3", "decade4", "dem", "dem4", "demch98", "dlang", "drel", "durable", "ef", "ef2", "ehet", "elfo", "elfo2", "etdo4590", "expgdp", "exrec", "fedpol3", "fuelexp", "gdpgrowth", "geo1", "geo2", "geo34", "geo57", "geo69", "geo8", "illiteracy", "incumb", "infant", "inst", "inst3", "life", "lmtnest", "ln_gdpen", "lpopns", "major", "manuexp", "milper", "mirps0", "mirps1", "mirps2", "mirps3", "nat_war", "ncontig", "nmgdp", "nmdp4_alt", "numlang", "nwstate", "oil", "p4mchg", "parcomp", "parreg", "part", "partfree", "plural", "plurrel", "pol4", "pol4m", "pol4sq", "polch98", "polcomp", "popdense", "presi", "pri", "proxregc", "ptime", "reg", "regd4_alt", "relfrac", "seceduc", "second", "semipol3", "sip2", "sxpnew", "sxpsq", "tnatwar", "trade", "warhist", "xconst".
+
+```{r setup, include=FALSE}
+# Colorblind friendly palette with grey:
+cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+library(randomForest) #for random forests
+library(caret) # for CV folds and data splitting
+library(ROCR) # for diagnostics and ROC plots/stats
+library(pROC) # same as ROCR
+library(stepPlr) # Firth's rare events logistic regression ("plr") implemented by caret
+library(doMC) # for using multiple processor cores
+library(xtable) # for writing Table 1 in Latex
+library(tidyverse)
+
+#Read in rds data
+data.full<-readRDS("data_full.rds")
+# str(data.full)
+#Since war is a rare event, Firth's rare event logistic regression (or penalization logistic regression) has been often used in the literature
+table(data.full$warstds) 
+
+#Distribute workload over multiple cores for faster computation
+detectCores()
+# registerDoMC(cores=6) # specify the number of cores to use for parallel execution
+set.seed(666) # random seed number from the replication codes
+```
+
+We're going to use the cross-validation function from the `caret` package. Set aside the years 1999 and 2000 for testing data.
+
+```{r}
+# caret::trainControl() controls parameters for train
+tc<-caret::trainControl(method="cv", # the resampling method
+                        number=10, # the number of folds 
+                        summaryFunction=twoClassSummary, # a function to compute performance metrics across resamples. 
+                                                         # twoClassSummary computes sensitivity, specificity and the AUC
+                        classProb=T, # class probabilities be computed for classification models 
+                                     # (along with predicted values) in each resample
+                        savePredictions = T)
+
+# Set train data
+data.train<-subset(data.full,year<1999)
+```
+
+## Question 1
+
+We're going to compare several model specifications using classic/penalized logistic regressions with a random forest model.
+
+(a) The Fearon & Laitin model (2003) "FL" can be described as the following:
+
+`as.factor(warstds) ~ warhist + ln_gdpen + lpopns + lmtnest + ncontig + oil + nwstate + inst3 + pol4 + ef + relfrac`
+
+Please run the `train` function in the `caret` library with metric as `ROC`, method as `glm`, family as `binomial` (FL used logistic), trControl as our set `tc`, and your training data, on the above specification. Do the same for a penalized logistic regression (`method="plr"`).
+
+```{r}
+
+# Logistic regression
+FL_mod <- train(as.factor(warstds) ~ warhist + ln_gdpen + lpopns + lmtnest + ncontig + oil + nwstate + inst3 + pol4 + ef + relfrac, data.train, 
+      method = "glm", metric = "ROC", family = binomial(link = "logit"), trControl = tc) 
+
+# Penalized logistic regression
+FL_mod_plr <- train(as.factor(warstds) ~ warhist + ln_gdpen + lpopns + lmtnest + ncontig + oil + nwstate + inst3 + pol4 + ef + relfrac, data.train, 
+      method = "plr", metric = "ROC", trControl = tc) 
+
+```
+
+
+(b) The Collier & Hoeffler model (2004) (CH) can be described as the following:
+
+`as.factor(warstds) ~ sxpnew + sxpsq + ln_gdpen + gdpgrowth + warhist + lmtnest + ef + popdense + lpopns + coldwar + seceduc + ptime`
+
+Please run the `train` function in the `caret` library with metric as `ROC`, method as `glm`, family as `binomial` (CH used logistic), trControl as our set `tc`, and your training data, on the above specification. Do the same for a penalized logistic regression (`method="plr"`).
+
+```{r}
+
+# Logistic regression
+CH_mod <- train(as.factor(warstds) ~ sxpnew + sxpsq + ln_gdpen + gdpgrowth + warhist + lmtnest + ef + popdense + lpopns + coldwar + seceduc + ptime, data.train, 
+      method = "glm", metric = "ROC", family = binomial(link = "logit"), trControl = tc) 
+
+# Penalized Logistic regression
+CH_mod_plr <- train(as.factor(warstds) ~ sxpnew + sxpsq + ln_gdpen + gdpgrowth + warhist + lmtnest + ef + popdense + lpopns + coldwar + seceduc + ptime, data.train, 
+      method = "plr", metric = "ROC", trControl = tc)
+
+```
+
+
+(c) The Hegre & Sambanis model (2006) (HS) can be described as the following:
+
+`as.factor(warstds) ~ lpopns + ln_gdpen + inst3 + parreg + geo34 + proxregc + gdpgrowth + anoc +  partfree + nat_war + lmtnest + decade1 + pol4sq + nwstate + regd4_alt + etdo4590 + milper +  geo1 + tnatwar + presi`
+
+Please run the `train` function in the `caret` library with metric as `ROC`, method as `glm`, family as `binomial` (HS used logistic), trControl as our set `tc`, and your training data, on the above specification. Do the same for a penalized logistic regression (`method="plr"`).
+
+```{r}
+
+# Logistic regression
+HS_mod <- train(as.factor(warstds) ~ lpopns + ln_gdpen + inst3 + parreg + geo34 + proxregc + gdpgrowth + anoc +  partfree + nat_war + lmtnest + decade1 + pol4sq + nwstate + regd4_alt + etdo4590 + milper +  geo1 + tnatwar + presi, data.train, 
+      method = "glm", metric = "ROC", family = binomial(link = "logit"), trControl = tc)
+
+# Penalized Logistic regression
+HS_mod_plr <- train(as.factor(warstds) ~ lpopns + ln_gdpen + inst3 + parreg + geo34 + proxregc + gdpgrowth + anoc +  partfree + nat_war + lmtnest + decade1 + pol4sq + nwstate + regd4_alt + etdo4590 + milper +  geo1 + tnatwar + presi, data.train, 
+      method = "plr", metric = "ROC", trControl = tc)
+
+```
+
+
+(d) Finally, run a random forest model on the outcome `warstds` with all regressors (except `year`) using `train`, metric as `ROC`, sampsize as `c(30,90)`, importance as `TRUE`, proximity as `FALSE`, number of trees to `1000`, tcControl as our above specified `tc` on the training data. (This may take some time, so you might want to start from a small number of trees and proceed with it. Once the codes are done, return to this question and set `ntree=1000`.)
+
+```{r}
+x <- data.train %>% select(!year) %>% select(!warstds)
+y <- as.factor(data.train$warstds)
+
+tree_mod <- train(x, y, metric = "ROC", sampsize = c(30,90), importance = TRUE, proximity = FALSE, ntrees = 10, trControl = tc)
+
+```
+
+
+What are the types of variables that seem to feature most in each type of model as predictors?
+
+```{r}
+
+```
+
+
+Save all models (total $3 \times 2 + 1 = 7$ models) with easy to read names.
+
+```{r}
+
+# Defining list of the 7 models
+models <- list(FL_mod, FL_mod_plr, HS_mod, HS_mod_plr, CH_mod, CH_mod_plr)
+
+```
+
+
+
+## Question 2
+
+We will now create ROC plots for different models:
+
+- Collect the predicted probabilities for the outcome from each of the above models (note these should be for the highest AUC score in the caret CV procedure, `your-logit-model$finalModel$fitted.values`). For the random forests model, requires a call from `predict()` with type set to "prob" (i.e., `predict(your-rf-model$finalModel, type="prob")`).
+- Follow the sample code below to create a `prediction` object from which to calculate the performance of the classifier in terms of true positive and false positive rates.
+- Plot the ROC curves of all the unpenalized models (= classic logistic regression) and the RF model.
+- Then separate, plot the ROC curves of all penalized models and the RF model. How does the RF model compare?
+
+Sample code: 
+```{r eval = FALSE}
+## ROC plot: Example with a *classic logistic regression* model trained with caret CV procedure
+library(ROCR) # We will use prediction() & performance() functions from this package
+
+
+results <- c()
+for(model in models) {
+  
+  ## 1. Collect the predicted probabilities
+  predict_probas <- model$finalModel$fitted.values 
+  # The above line should be changed for *penalized logistic regression* and *RF* model
+    
+  ## 2. Using in-sample prediction, calculate true positive and false positive rates.
+  predictions <- prediction(predict_probas, data.train$warstds)
+  results <- c(results, performance(predictions,"tpr","fpr"))
+
+}
+
+# Different predict function for forest
+tree_probas <- tree_mod$finalModel$fitted.values 
+tree_predicts <- predict(tree_mod$finalModel, type="prob")
+results <- c(results, performance(tree_predicts,"tpr","fpr"))
+
+  
+
+
+
+```
+
+## Question 3
+
+Finally, we will evaluate out of sample prediction of unpenalized models and the RF model.
+
+Pull out the testing data (1999, 2000) and evaluate each of the model predictions on the testing data. Focus on true positives, or when `warstds` is (correctly) classified with high probability as a "war".
