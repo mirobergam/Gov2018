@@ -71,7 +71,7 @@ We're going to compare several model specifications using classic/penalized logi
 
 Please run the `train` function in the `caret` library with metric as `ROC`, method as `glm`, family as `binomial` (FL used logistic), trControl as our set `tc`, and your training data, on the above specification. Do the same for a penalized logistic regression (`method="plr"`).
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 
 # Logistic regression
 FL_mod <- train(as.factor(warstds) ~ warhist + ln_gdpen + lpopns + lmtnest + ncontig + oil + nwstate + inst3 + pol4 + ef + relfrac, data.train, 
@@ -90,7 +90,7 @@ FL_mod_plr <- train(as.factor(warstds) ~ warhist + ln_gdpen + lpopns + lmtnest +
 
 Please run the `train` function in the `caret` library with metric as `ROC`, method as `glm`, family as `binomial` (CH used logistic), trControl as our set `tc`, and your training data, on the above specification. Do the same for a penalized logistic regression (`method="plr"`).
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 
 # Logistic regression
 CH_mod <- train(as.factor(warstds) ~ sxpnew + sxpsq + ln_gdpen + gdpgrowth + warhist + lmtnest + ef + popdense + lpopns + coldwar + seceduc + ptime, data.train, 
@@ -109,7 +109,7 @@ CH_mod_plr <- train(as.factor(warstds) ~ sxpnew + sxpsq + ln_gdpen + gdpgrowth +
 
 Please run the `train` function in the `caret` library with metric as `ROC`, method as `glm`, family as `binomial` (HS used logistic), trControl as our set `tc`, and your training data, on the above specification. Do the same for a penalized logistic regression (`method="plr"`).
 
-```{r}
+```{r, warning = FALSE, message = FALSE}
 
 # Logistic regression
 HS_mod <- train(as.factor(warstds) ~ lpopns + ln_gdpen + inst3 + parreg + geo34 + proxregc + gdpgrowth + anoc +  partfree + nat_war + lmtnest + decade1 + pol4sq + nwstate + regd4_alt + etdo4590 + milper +  geo1 + tnatwar + presi, data.train, 
@@ -125,10 +125,13 @@ HS_mod_plr <- train(as.factor(warstds) ~ lpopns + ln_gdpen + inst3 + parreg + ge
 (d) Finally, run a random forest model on the outcome `warstds` with all regressors (except `year`) using `train`, metric as `ROC`, sampsize as `c(30,90)`, importance as `TRUE`, proximity as `FALSE`, number of trees to `1000`, tcControl as our above specified `tc` on the training data. (This may take some time, so you might want to start from a small number of trees and proceed with it. Once the codes are done, return to this question and set `ntree=1000`.)
 
 ```{r}
+
+# Cleaning the data
 x <- data.train %>% select(!year) %>% select(!warstds)
 y <- as.factor(data.train$warstds)
 
-tree_mod <- train(x, y, metric = "ROC", sampsize = c(30,90), importance = TRUE, proximity = FALSE, ntrees = 10, trControl = tc)
+# Creating random forest
+tree_mod <- train(x, y, metric = "ROC", sampsize = c(30,90), importance = TRUE, proximity = FALSE, ntrees = 100, trControl = tc)
 
 ```
 
@@ -136,16 +139,25 @@ tree_mod <- train(x, y, metric = "ROC", sampsize = c(30,90), importance = TRUE, 
 What are the types of variables that seem to feature most in each type of model as predictors?
 
 ```{r}
-
+# Calling a summary of all models to see variables
+#summary(CH_mod)
+#summary(CH_mod_plr)
+#summary(FL_mod)
+#summary(FL_mod_plr)
+#summary(HS_mod)
+#summary(HS_mod_plr)
+#summary(tree_mod) 
 ```
 
+After looking at the summary output, there is a diverse range of variables used but predictors relating to GDP showed up across multiple models, both the ln(GDP) variable and the GDP growth variable. This speaks the strength of economic health as a predictor. 
 
 Save all models (total $3 \times 2 + 1 = 7$ models) with easy to read names.
 
 ```{r}
 
-# Defining list of the 7 models
-models <- list(FL_mod, FL_mod_plr, HS_mod, HS_mod_plr, CH_mod, CH_mod_plr)
+# Defining list of the 7 models, leaving out tree model because it uses a different predict function
+plr_models <- list(FL_mod_plr, HS_mod_plr, CH_mod_plr)
+norm_models <- list(FL_mod, HS_mod, CH_mod)
 
 ```
 
@@ -167,7 +179,27 @@ library(ROCR) # We will use prediction() & performance() functions from this pac
 
 
 results <- c()
-for(model in models) {
+
+# Penalized models
+for(model in plr_models) {
+  
+  ## 1. Collect the predicted probabilities
+  predict_probas <- 1 - model$finalModel$fitted.values 
+  # The above line should be changed for *penalized logistic regression* and *RF* model
+    
+  ## 2. Using in-sample prediction, calculate true positive and false positive rates.
+  predictions <- prediction(predict_probas, data.train$warstds)
+  results <- c(results, performance(predictions,"tpr","fpr"))
+
+}
+
+# Different predict function for forest
+tree_predicts <- predict(tree_mod$finalModel, type="prob")
+predictions <- prediction(tree_predicts[,2], data.train$warstds)
+results <- c(results, performance(predictions,"tpr","fpr"))
+
+# Normal non-penalized models
+for(model in norm_models) {
   
   ## 1. Collect the predicted probabilities
   predict_probas <- model$finalModel$fitted.values 
@@ -179,19 +211,70 @@ for(model in models) {
 
 }
 
-# Different predict function for forest
-tree_probas <- tree_mod$finalModel$fitted.values 
-tree_predicts <- predict(tree_mod$finalModel, type="prob")
-results <- c(results, performance(tree_predicts,"tpr","fpr"))
-
-  
 
 
+# Plotting results
+plot(results[[1]], main="Penalized Logits and Random Forest", col = cbp1[1], label = "Tree")
+plot(results[[2]], add = TRUE, col = cbp1[2])
+plot(results[[3]], add = TRUE, col =cbp1[3])
+plot(results[[4]], add = TRUE, col =cbp1[4])
+
+
+# Adding legend
+legend("bottomright", c("CH Model Plr", "HS Model Plr", "FL model PLR", "Tree"), cex = .75, col = cbp1[1:4],pch = 20)
+```
+
+
+```{r eval = FALSE}
+cols <- c("Tree", "CH Model", "HS Model", "FL Model")
+
+plot(results[[4]], main="Logits and Random Forest", col = cbp1[4])
+plot(results[[5]], add = TRUE, col =cbp1[5])
+plot(results[[6]], add = TRUE, col = cbp1[6])
+plot(results[[7]], add = TRUE, col = cbp1[7])
+
+
+# Adding legend
+legend("bottomright",c("Tree", "CH Model", "HS Model", "FL Model"), cex = .75, col = cbp1[4:7],pch = 20)
 
 ```
+
+For both the normal logits and the penalized logits, the random forest analysis performs the best of the bunch, with a higher true positive rate across false positive rates. 
 
 ## Question 3
 
 Finally, we will evaluate out of sample prediction of unpenalized models and the RF model.
 
 Pull out the testing data (1999, 2000) and evaluate each of the model predictions on the testing data. Focus on true positives, or when `warstds` is (correctly) classified with high probability as a "war".
+
+
+```{r}
+
+# Subsetting the data
+dat <- subset(data.full, subset = data.full$year >= 1999)
+
+# Showing the number of wars in dataset
+table(dat$warstds) 
+
+# Generate out of sample predictions for Table 1 
+RF_pred<-as.data.frame(predict(tree_mod, newdata=dat, type="prob"))
+FL_pred<-as.data.frame(predict(FL_mod, newdata=dat, type="prob"))
+CH_pred<-as.data.frame(predict(CH_mod, newdata=dat, type="prob")) 
+HS_pred<-as.data.frame(predict(HS_mod, newdata=dat, type="prob"))
+
+preds<-cbind(dat$year, dat$warstds, FL_pred[,2], CH_pred[,2], HS_pred[,2], RF_pred[,2])
+colnames(preds)<-c("year", "CW_Onset", 
+                   "Fearon and Latin (2003)", 
+                   "Collier and Hoeffler (2004)",
+                   "Hegre and Sambanis (2006)",
+                   "Random Forest")
+preds<-as.data.frame(preds)
+
+# Table results
+finalTable<-preds[order(-preds$CW_Onset, preds$year),]
+#Filling in 0 or 1 with peace or war
+finalTable$CW_Onset = c("peace", "war")[finalTable$CW_Onset] 
+
+head(finalTable, n=6)
+```
+

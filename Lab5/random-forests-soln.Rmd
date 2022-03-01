@@ -1,0 +1,66 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+---
+title: 'Gov 2018: Lab 5 Random Forests (Solutions)'
+author:
+- 'Your name: '
+date: 'February 22, 2022'
+output:
+  pdf_document: default
+  html_document: default
+
+
+```{r}
+plot(c(0, 1, 1,1), c(0, 1, 1,1))
+```
+
+
+```{r}
+
+results <- c()
+for(model in models) {
+  
+  ## 1. Collect the predicted probabilities
+  predict_probas <- 1 - model$finalModel$fitted.values 
+  # The above line should be changed for *penalized logistic regression* and *RF* model
+    
+  ## 2. Using in-sample prediction, calculate true positive and false positive rates.
+  predictions <- prediction(predict_probas, data.train$warstds)
+  results <- c(results, performance(predictions,"tpr","fpr"))
+
+}
+
+# Different predict function for forest
+tree_predicts <- predict(tree_mod$finalModel, type="prob")
+predictions <- prediction(tree_predicts[,2], data.train$warstds)
+results <- c(results, performance(predictions,"tpr","fpr"))
+
+list(FL_mod, FL_mod_plr, HS_mod, HS_mod_plr, CH_mod, CH_mod_plr, tree_mod)
+
+# Plotting results
+cols <- c("CH Model Plr", "HS Model Plr", "FL model PLR")
+plot(results[[1]], main="Penalized Logits", col = cbp1[1], label = "Tree")
+plot(results[[3]], add = TRUE, col = cbp1[2])
+plot(results[[5]], add = TRUE, col =cbp1[3])
+
+
+# Adding legend
+legend("bottomright", c("CH Model Plr", "HS Model Plr", "FL model PLR"), cex = .75, col = cbp1[1:3],pch = 20)
+
+cols <- c("Tree", "CH Model", "HS Model", "FL Model")
+
+plot(results[[2]], main="Logits and Random Forest", col = cbp1[4])
+plot(results[[7]], add = TRUE, col =cbp1[5])
+plot(results[[4]], add = TRUE, col = cbp1[6])
+plot(results[[6]], add = TRUE, col =cbp1[7])
+
+# Adding legend
+legend("bottomright",c("Tree", "CH Model", "HS Model", "FL Model"), cex = .75, col = cbp1[4:7],pch = 20)
+
+
+
+```
+
